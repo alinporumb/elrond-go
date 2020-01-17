@@ -7,7 +7,7 @@ import (
 )
 
 func (kdd *KadDhtDiscoverer) PeersRefreshInterval() time.Duration {
-	return kdd.peersRefreshInterval
+	return kdd.refreshInterval
 }
 
 func (kdd *KadDhtDiscoverer) InitialPeersList() []string {
@@ -16,14 +16,6 @@ func (kdd *KadDhtDiscoverer) InitialPeersList() []string {
 
 func (kdd *KadDhtDiscoverer) RandezVous() string {
 	return kdd.randezVous
-}
-
-func (kdd *KadDhtDiscoverer) RoutingTableRefresh() time.Duration {
-	return kdd.routingTableRefresh
-}
-
-func (kdd *KadDhtDiscoverer) BucketSize() uint32 {
-	return kdd.bucketSize
 }
 
 func (kdd *KadDhtDiscoverer) ContextProvider() *libp2p.Libp2pContext {

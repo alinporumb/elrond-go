@@ -23,22 +23,13 @@ func main() {
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
 	startingPort := 32000
 
-	randezVous := "test"
-	arg := discovery.ArgKadDht{
-		PeersRefreshInterval: time.Second,
-		RandezVous:           randezVous,
-		InitialPeersList:     nil,
-		BucketSize:           100,
-		RoutingTableRefresh:  time.Minute,
-	}
-	peerDiscovery, _ := discovery.NewKadDhtPeerDiscoverer(arg)
 	advertiser, _ := libp2p.NewNetworkMessenger(
 		context.Background(),
 		startingPort,
 		genPrivKey(),
 		nil,
 		loadBalancer.NewOutgoingChannelLoadBalancer(),
-		peerDiscovery,
+		discovery.NewKadDhtPeerDiscoverer(time.Second, "test", nil),
 		libp2p.ListenLocalhostAddrWithIp4AndTcp,
 		0,
 	)
@@ -48,16 +39,17 @@ func main() {
 	_ = advertiser.Bootstrap()
 
 	for i := 0; i < 99; i++ {
-		argPeer := arg
-		argPeer.InitialPeersList = []string{getConnectableAddress(advertiser)}
-		peerDiscovery, _ := discovery.NewKadDhtPeerDiscoverer(argPeer)
 		netPeer, _ := libp2p.NewNetworkMessenger(
 			context.Background(),
 			startingPort,
 			genPrivKey(),
 			nil,
 			loadBalancer.NewOutgoingChannelLoadBalancer(),
-			peerDiscovery,
+			discovery.NewKadDhtPeerDiscoverer(
+				time.Second,
+				"test",
+				[]string{getConnectableAddress(advertiser)},
+			),
 			libp2p.ListenLocalhostAddrWithIp4AndTcp,
 			0,
 		)
