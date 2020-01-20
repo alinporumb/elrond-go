@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/ElrondNetwork/elrond-go/data"
+	"github.com/ElrondNetwork/elrond-go/process/block/processedMb"
 )
 
 // BlockProcessorMock mocks the implementation for a blockProcessor
@@ -17,7 +18,7 @@ type BlockProcessorMock struct {
 	CreateBlockCalled                func(initialHdrData data.HeaderHandler, haveTime func() bool) (data.BodyHandler, error)
 	RestoreBlockIntoPoolsCalled      func(header data.HeaderHandler, body data.BodyHandler) error
 	SetOnRequestTransactionCalled    func(f func(destShardID uint32, txHash []byte))
-	ApplyBodyToHeaderCalled          func(hdr data.HeaderHandler, body data.BodyHandler) error
+	ApplyBodyToHeaderCalled          func(hdr data.HeaderHandler, body data.BodyHandler) (data.BodyHandler, error)
 	MarshalizedDataToBroadcastCalled func(header data.HeaderHandler, body data.BodyHandler) (map[uint32][]byte, map[string][][]byte, error)
 	DecodeBlockBodyCalled            func(dta []byte) data.BodyHandler
 	DecodeBlockHeaderCalled          func(dta []byte) data.HeaderHandler
@@ -29,7 +30,7 @@ func (blProcMock *BlockProcessorMock) SetNumProcessedObj(numObj uint64) {
 
 }
 
-func (blProcMock *BlockProcessorMock) ApplyProcessedMiniBlocks(miniBlocks map[string]map[string]struct{}) {
+func (blProcMock *BlockProcessorMock) ApplyProcessedMiniBlocks(miniBlocks *processedMb.ProcessedMiniBlockTracker) {
 
 }
 
@@ -54,7 +55,7 @@ func (blProcMock *BlockProcessorMock) CommitBlock(blockChain data.ChainHandler, 
 // RevertStateToBlock recreates the state tries to the root hashes indicated by the provided header
 func (blProcMock *BlockProcessorMock) RevertStateToBlock(header data.HeaderHandler) error {
 	if blProcMock.RevertStateToBlockCalled != nil {
-		return blProcMock.RevertStateToBlock(header)
+		return blProcMock.RevertStateToBlockCalled(header)
 	}
 	return nil
 }
@@ -73,7 +74,7 @@ func (blProcMock *BlockProcessorMock) RestoreBlockIntoPools(header data.HeaderHa
 	return blProcMock.RestoreBlockIntoPoolsCalled(header, body)
 }
 
-func (blProcMock BlockProcessorMock) ApplyBodyToHeader(hdr data.HeaderHandler, body data.BodyHandler) error {
+func (blProcMock BlockProcessorMock) ApplyBodyToHeader(hdr data.HeaderHandler, body data.BodyHandler) (data.BodyHandler, error) {
 	return blProcMock.ApplyBodyToHeaderCalled(hdr, body)
 }
 

@@ -133,7 +133,7 @@ func TestNode_SendBulkTransactionsAllTransactionsShouldBeSentCorrectly(t *testin
 
 func txPoolRegister(n *integrationTests.TestProcessorNode, mutex *sync.Mutex) {
 
-	n.ShardDataPool.Transactions().RegisterHandler(func(key []byte) {
+	n.DataPool.Transactions().RegisterHandler(func(key []byte) {
 		mutex.Lock()
 		receivedTxsPerShard[n.ShardCoordinator.SelfId()]++
 		mutex.Unlock()
@@ -177,9 +177,8 @@ func generateTx(sender crypto.PrivateKey, receiver crypto.PublicKey) *transactio
 		SndAddr:   senderBytes,
 		GasPrice:  integrationTests.MinTxGasPrice,
 		GasLimit:  integrationTests.MinTxGasLimit,
-		Data:      "",
+		Data:      []byte(""),
 		Signature: nil,
-		Challenge: nil,
 	}
 	marshalizedTxBeforeSigning, _ := json.Marshal(tx)
 	signer := singlesig.SchnorrSigner{}

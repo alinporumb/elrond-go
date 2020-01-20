@@ -22,7 +22,6 @@ func TestDeployAgarioContract(t *testing.T) {
 	senderAddressBytes := []byte("12345678901234567890123456789012")
 	senderNonce := uint64(11)
 	senderBalance := big.NewInt(100000000)
-	round := uint64(444)
 	gasPrice := uint64(1)
 	gasLimit := uint64(1000000)
 
@@ -35,7 +34,6 @@ func TestDeployAgarioContract(t *testing.T) {
 		gasPrice,
 		gasLimit,
 		string(scCode)+"@"+hex.EncodeToString(factory.IELEVirtualMachine),
-		round,
 		txProc,
 		accnts,
 	)
@@ -57,7 +55,6 @@ func TestAgarioContractTopUpShouldWork(t *testing.T) {
 	senderAddressBytes := []byte("12345678901234567890123456789012")
 	senderNonce := uint64(11)
 	senderBalance := big.NewInt(100000000)
-	round := uint64(444)
 	gasPrice := uint64(1)
 	gasLimit := uint64(1000000)
 
@@ -70,7 +67,6 @@ func TestAgarioContractTopUpShouldWork(t *testing.T) {
 		gasPrice,
 		gasLimit,
 		string(scCode)+"@"+hex.EncodeToString(factory.IELEVirtualMachine),
-		round,
 		txProc,
 		accnts,
 	)
@@ -100,7 +96,7 @@ func TestAgarioContractTopUpShouldWork(t *testing.T) {
 		data,
 	)
 
-	err = txProc.ProcessTransaction(txRun, round)
+	err = txProc.ProcessTransaction(txRun)
 	assert.Nil(t, err)
 
 	_, err = accnts.Commit()
@@ -116,7 +112,6 @@ func TestAgarioContractTopUpAnfWithdrawShouldWork(t *testing.T) {
 	senderAddressBytes := []byte("12345678901234567890123456789012")
 	senderNonce := uint64(11)
 	senderBalance := big.NewInt(100000000)
-	round := uint64(444)
 	gasPrice := uint64(1)
 	gasLimit := uint64(100000)
 
@@ -129,7 +124,6 @@ func TestAgarioContractTopUpAnfWithdrawShouldWork(t *testing.T) {
 		gasPrice,
 		gasLimit,
 		string(scCode)+"@"+hex.EncodeToString(factory.IELEVirtualMachine),
-		round,
 		txProc,
 		accnts,
 	)
@@ -160,7 +154,7 @@ func TestAgarioContractTopUpAnfWithdrawShouldWork(t *testing.T) {
 	)
 
 	userNonce++
-	err = txProc.ProcessTransaction(txRun, round)
+	err = txProc.ProcessTransaction(txRun)
 	assert.Nil(t, err)
 
 	_, err = accnts.Commit()
@@ -183,7 +177,7 @@ func TestAgarioContractTopUpAnfWithdrawShouldWork(t *testing.T) {
 		data,
 	)
 
-	err = txProc.ProcessTransaction(txRun, round)
+	err = txProc.ProcessTransaction(txRun)
 	assert.Nil(t, err)
 
 	_, err = accnts.Commit()
@@ -195,13 +189,16 @@ func TestAgarioContractTopUpAnfWithdrawShouldWork(t *testing.T) {
 }
 
 func TestAgarioContractJoinGameReward(t *testing.T) {
+	if testing.Short() {
+		t.Skip("this is not a short test")
+	}
+
 	scCode, err := ioutil.ReadFile(agarioFile)
 	assert.Nil(t, err)
 
 	senderAddressBytes := []byte("12345678901234567890123456789012")
 	senderNonce := uint64(11)
 	senderBalance := big.NewInt(100000000)
-	round := uint64(444)
 	gasPrice := uint64(0)
 	gasLimit := uint64(100000)
 
@@ -214,7 +211,6 @@ func TestAgarioContractJoinGameReward(t *testing.T) {
 		gasPrice,
 		gasLimit,
 		string(scCode)+"@"+hex.EncodeToString(factory.IELEVirtualMachine),
-		round,
 		txProc,
 		accnts,
 	)
@@ -267,7 +263,7 @@ func TestAgarioContractJoinGameReward(t *testing.T) {
 			data,
 		)
 
-		err = txProc.ProcessTransaction(txRun, round)
+		err = txProc.ProcessTransaction(txRun)
 		assert.Nil(t, err)
 
 		newUserBalance := vm.GetAccountsBalance(usersAddresses[i], accnts)
@@ -302,7 +298,7 @@ func TestAgarioContractJoinGameReward(t *testing.T) {
 			data,
 		)
 
-		err = txProc.ProcessTransaction(txRun, round)
+		err = txProc.ProcessTransaction(txRun)
 		assert.Nil(t, err)
 
 		senderNonce++
@@ -313,10 +309,10 @@ func TestAgarioContractJoinGameReward(t *testing.T) {
 
 	for i := 0; i < noOfUsers; i++ {
 		existingUserBalance := vm.GetAccountsBalance(usersAddresses[i], accnts)
-		computedBalance := big.NewInt(0).Set(afterJoinUsersBalances[i])
+		computedBalance = big.NewInt(0).Set(afterJoinUsersBalances[i])
 		computedBalance.Add(computedBalance, prize)
 
-		assert.Equal(t, computedBalance, existingUserBalance)
+		assert.Equal(t, computedBalance.Uint64(), existingUserBalance.Uint64())
 	}
 
 	transferredBack := big.NewInt(0).Set(prize)
@@ -326,7 +322,7 @@ func TestAgarioContractJoinGameReward(t *testing.T) {
 	computedBalance.Sub(computedBalance, transferredBack)
 	balanceOfSC, _ = blockchainHook.GetBalance(scAddressBytes)
 	fmt.Printf("balance of SC: %v\n", balanceOfSC)
-	assert.Equal(t, computedBalance, balanceOfSC)
+	assert.Equal(t, computedBalance.Uint64(), balanceOfSC.Uint64())
 }
 
 func BenchmarkAgarioJoinGame(b *testing.B) {
@@ -336,7 +332,6 @@ func BenchmarkAgarioJoinGame(b *testing.B) {
 	senderAddressBytes := []byte("12345678901234567890123456789012")
 	senderNonce := uint64(11)
 	senderBalance := big.NewInt(100000000)
-	round := uint64(444)
 	gasPrice := uint64(0)
 	gasLimit := uint64(1000000)
 
@@ -349,7 +344,6 @@ func BenchmarkAgarioJoinGame(b *testing.B) {
 		gasPrice,
 		gasLimit,
 		string(scCode)+"@"+hex.EncodeToString(factory.IELEVirtualMachine),
-		round,
 		txProc,
 		accnts,
 	)
@@ -381,6 +375,6 @@ func BenchmarkAgarioJoinGame(b *testing.B) {
 		)
 
 		b.StartTimer()
-		_ = txProc.ProcessTransaction(txRun, round)
+		_ = txProc.ProcessTransaction(txRun)
 	}
 }

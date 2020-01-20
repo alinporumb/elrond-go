@@ -1,6 +1,7 @@
 package spos
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"sync"
@@ -11,6 +12,7 @@ import (
 	"github.com/ElrondNetwork/elrond-go/core/check"
 	"github.com/ElrondNetwork/elrond-go/crypto"
 	"github.com/ElrondNetwork/elrond-go/data"
+	"github.com/ElrondNetwork/elrond-go/display"
 	"github.com/ElrondNetwork/elrond-go/marshal"
 	"github.com/ElrondNetwork/elrond-go/ntp"
 	"github.com/ElrondNetwork/elrond-go/p2p"
@@ -33,6 +35,8 @@ type Worker struct {
 	shardCoordinator   sharding.Coordinator
 	singleSigner       crypto.SingleSigner
 	syncTimer          ntp.SyncTimer
+	headerSigVerifier  RandSeedVerifier
+	chainID            []byte
 
 	receivedMessages      map[consensus.MessageType][]*consensus.Message
 	receivedMessagesCalls map[consensus.MessageType]func(*consensus.Message) bool
@@ -62,6 +66,8 @@ func NewWorker(
 	shardCoordinator sharding.Coordinator,
 	singleSigner crypto.SingleSigner,
 	syncTimer ntp.SyncTimer,
+	headerSigVerifier RandSeedVerifier,
+	chainID []byte,
 ) (*Worker, error) {
 	err := checkNewWorkerParams(
 		consensusService,
@@ -77,6 +83,8 @@ func NewWorker(
 		shardCoordinator,
 		singleSigner,
 		syncTimer,
+		headerSigVerifier,
+		chainID,
 	)
 	if err != nil {
 		return nil, err
@@ -96,6 +104,8 @@ func NewWorker(
 		shardCoordinator:   shardCoordinator,
 		singleSigner:       singleSigner,
 		syncTimer:          syncTimer,
+		headerSigVerifier:  headerSigVerifier,
+		chainID:            chainID,
 	}
 
 	wrk.executeMessageChannel = make(chan *consensus.Message)
@@ -125,45 +135,53 @@ func checkNewWorkerParams(
 	shardCoordinator sharding.Coordinator,
 	singleSigner crypto.SingleSigner,
 	syncTimer ntp.SyncTimer,
+	headerSigVerifier RandSeedVerifier,
+	chainID []byte,
 ) error {
-	if consensusService == nil || consensusService.IsInterfaceNil() {
+	if check.IfNil(consensusService) {
 		return ErrNilConsensusService
 	}
-	if blockChain == nil || blockChain.IsInterfaceNil() {
+	if check.IfNil(blockChain) {
 		return ErrNilBlockChain
 	}
-	if blockProcessor == nil || blockProcessor.IsInterfaceNil() {
+	if check.IfNil(blockProcessor) {
 		return ErrNilBlockProcessor
 	}
-	if bootstrapper == nil || bootstrapper.IsInterfaceNil() {
+	if check.IfNil(bootstrapper) {
 		return ErrNilBootstrapper
 	}
-	if broadcastMessenger == nil || broadcastMessenger.IsInterfaceNil() {
+	if check.IfNil(broadcastMessenger) {
 		return ErrNilBroadcastMessenger
 	}
 	if consensusState == nil {
 		return ErrNilConsensusState
 	}
-	if forkDetector == nil || forkDetector.IsInterfaceNil() {
+	if check.IfNil(forkDetector) {
 		return ErrNilForkDetector
 	}
-	if keyGenerator == nil || keyGenerator.IsInterfaceNil() {
+	if check.IfNil(keyGenerator) {
 		return ErrNilKeyGenerator
 	}
-	if marshalizer == nil || marshalizer.IsInterfaceNil() {
+	if check.IfNil(marshalizer) {
 		return ErrNilMarshalizer
 	}
-	if rounder == nil || rounder.IsInterfaceNil() {
+	if check.IfNil(rounder) {
 		return ErrNilRounder
 	}
-	if shardCoordinator == nil || shardCoordinator.IsInterfaceNil() {
+	if check.IfNil(shardCoordinator) {
 		return ErrNilShardCoordinator
 	}
-	if singleSigner == nil || singleSigner.IsInterfaceNil() {
+	if check.IfNil(singleSigner) {
 		return ErrNilSingleSigner
 	}
-	if syncTimer == nil || syncTimer.IsInterfaceNil() {
+	if check.IfNil(syncTimer) {
 		return ErrNilSyncTimer
+	}
+	if check.IfNil(headerSigVerifier) {
+		return ErrNilHeaderSigVerifier
+	}
+	if len(chainID) == 0 {
+		return ErrInvalidChainID
 	}
 
 	return nil
@@ -217,10 +235,9 @@ func (wrk *Worker) getCleanedList(cnsDataList []*consensus.Message) []*consensus
 
 // ProcessReceivedMessage method redirects the received message to the channel which should handle it
 func (wrk *Worker) ProcessReceivedMessage(message p2p.MessageP2P, _ func(buffToSend []byte)) error {
-	if message == nil || message.IsInterfaceNil() {
+	if check.IfNil(message) {
 		return ErrNilMessage
 	}
-
 	if message.Data() == nil {
 		return ErrNilDataToProcess
 	}
@@ -229,6 +246,12 @@ func (wrk *Worker) ProcessReceivedMessage(message p2p.MessageP2P, _ func(buffToS
 	err := wrk.marshalizer.Unmarshal(cnsDta, message.Data())
 	if err != nil {
 		return err
+	}
+	if !bytes.Equal(cnsDta.ChainID, wrk.chainID) {
+		return fmt.Errorf("%w : received: %s, wanted: %s",
+			ErrInvalidChainID,
+			hex.EncodeToString(cnsDta.ChainID),
+			hex.EncodeToString(wrk.chainID))
 	}
 
 	msgType := consensus.MessageType(cnsDta.MsgType)
@@ -242,7 +265,9 @@ func (wrk *Worker) ProcessReceivedMessage(message p2p.MessageP2P, _ func(buffToS
 
 	senderOK := wrk.consensusState.IsNodeInEligibleList(string(cnsDta.PubKey))
 	if !senderOK {
-		return ErrSenderNotOk
+		return fmt.Errorf("%w : node with public key %s is not in eligible list",
+			ErrSenderNotOk,
+			display.DisplayByteSlice(cnsDta.PubKey))
 	}
 
 	if wrk.consensusState.RoundIndex > cnsDta.RoundIndex {
@@ -258,24 +283,19 @@ func (wrk *Worker) ProcessReceivedMessage(message p2p.MessageP2P, _ func(buffToS
 
 	sigVerifErr := wrk.checkSignature(cnsDta)
 	if sigVerifErr != nil {
-		return ErrInvalidSignature
+		return fmt.Errorf("%w : verify consensus data signature failed: %s",
+			ErrInvalidSignature,
+			sigVerifErr.Error())
 	}
 
 	if wrk.consensusService.IsMessageWithBlockHeader(msgType) {
 		headerHash := cnsDta.BlockHeaderHash
 		header := wrk.blockProcessor.DecodeBlockHeader(cnsDta.SubRoundData)
 
-		//TODO: Block validity should be checked here and also on interceptors side, taking into consideration the following:
-		//(previous random seed, round, shard id and current random seed to verify if the block has been sent by the right proposer)
 		isHeaderInvalid := check.IfNil(header) || headerHash == nil
 		if isHeaderInvalid {
-			return ErrInvalidHeader
-		}
-
-		err = wrk.forkDetector.AddHeader(header, headerHash, process.BHProposed, nil, nil, false)
-		if err != nil {
-			log.Trace("add header in forkdetector", "error", err.Error())
-			return err
+			return fmt.Errorf("%w : received header from consensus topic is invalid",
+				ErrInvalidHeader)
 		}
 
 		log.Debug("received proposed block",
@@ -285,6 +305,26 @@ func (wrk *Worker) ProcessReceivedMessage(message p2p.MessageP2P, _ func(buffToS
 			"nonce", header.GetNonce(),
 			"prev hash", header.GetPrevHash(),
 		)
+
+		err = header.CheckChainID(wrk.chainID)
+		if err != nil {
+			return fmt.Errorf("%w : chain ID in received header from consensus topic is invalid",
+				err)
+		}
+
+		err = wrk.headerSigVerifier.VerifyRandSeed(header)
+		if err != nil {
+			return fmt.Errorf("%w : verify rand seed for received header from consensus topic failed",
+				err)
+		}
+
+		err = wrk.forkDetector.AddHeader(header, headerHash, process.BHProposed, nil, nil)
+		if err != nil {
+			log.Debug("add received header from consensus topic to fork detector failed",
+				"error", err.Error())
+			//we should not return error here because the other peers connected to self might need this message
+			//to advance the consensus
+		}
 	}
 
 	if wrk.consensusService.IsMessageWithSignature(msgType) {
@@ -419,7 +459,7 @@ func (wrk *Worker) Extend(subroundId int) {
 	wrk.mapHashConsensusMessage = make(map[string][]*consensus.Message)
 	wrk.mutHashConsensusMessage.Unlock()
 
-	if wrk.bootstrapper.ShouldSync() {
+	if wrk.consensusService.IsSubroundStartRound(subroundId) {
 		return
 	}
 
@@ -427,7 +467,7 @@ func (wrk *Worker) Extend(subroundId int) {
 		time.Sleep(time.Millisecond)
 	}
 
-	log.Trace("account state is reverted to snapshot")
+	log.Debug("account state is reverted to snapshot")
 
 	wrk.blockProcessor.RevertAccountState()
 
@@ -461,19 +501,19 @@ func (wrk *Worker) displaySignatureStatistic() {
 		)
 
 		for _, consensusMessage := range consensusMessages {
-			log.Trace(fmt.Sprintf("%s", core.GetTrimmedPk(core.ToHex(consensusMessage.PubKey))))
+			log.Trace(core.GetTrimmedPk(core.ToHex(consensusMessage.PubKey)))
 		}
 
 	}
 	wrk.mutHashConsensusMessage.RUnlock()
 }
 
-//GetConsensusStateChangedChannel gets the channel for the consensusStateChanged
+// GetConsensusStateChangedChannel gets the channel for the consensusStateChanged
 func (wrk *Worker) GetConsensusStateChangedChannel() chan bool {
 	return wrk.consensusStateChangedChannel
 }
 
-//ExecuteStoredMessages tries to execute all the messages received which are valid for execution
+// ExecuteStoredMessages tries to execute all the messages received which are valid for execution
 func (wrk *Worker) ExecuteStoredMessages() {
 	wrk.mutReceivedMessages.Lock()
 	wrk.executeStoredMessages()

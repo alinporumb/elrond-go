@@ -5,14 +5,15 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
+	"math/big"
 	"math/rand"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
-	"math/big"
-
+	"github.com/ElrondNetwork/elrond-go/config"
 	"github.com/ElrondNetwork/elrond-go/consensus/round"
 	"github.com/ElrondNetwork/elrond-go/crypto"
 	"github.com/ElrondNetwork/elrond-go/crypto/signing"
@@ -24,20 +25,23 @@ import (
 	"github.com/ElrondNetwork/elrond-go/data/state"
 	"github.com/ElrondNetwork/elrond-go/data/state/addressConverters"
 	"github.com/ElrondNetwork/elrond-go/data/trie"
-	"github.com/ElrondNetwork/elrond-go/data/typeConverters/uint64ByteSlice"
+	"github.com/ElrondNetwork/elrond-go/data/trie/evictionWaitingList"
 	"github.com/ElrondNetwork/elrond-go/dataRetriever"
 	"github.com/ElrondNetwork/elrond-go/dataRetriever/dataPool"
+	"github.com/ElrondNetwork/elrond-go/dataRetriever/dataPool/headersCache"
 	"github.com/ElrondNetwork/elrond-go/dataRetriever/shardedData"
+	"github.com/ElrondNetwork/elrond-go/dataRetriever/txpool"
+	"github.com/ElrondNetwork/elrond-go/epochStart/metachain"
 	"github.com/ElrondNetwork/elrond-go/hashing"
 	"github.com/ElrondNetwork/elrond-go/hashing/blake2b"
 	"github.com/ElrondNetwork/elrond-go/hashing/sha256"
+	"github.com/ElrondNetwork/elrond-go/integrationTests"
 	"github.com/ElrondNetwork/elrond-go/integrationTests/mock"
 	"github.com/ElrondNetwork/elrond-go/marshal"
 	"github.com/ElrondNetwork/elrond-go/node"
 	"github.com/ElrondNetwork/elrond-go/ntp"
 	"github.com/ElrondNetwork/elrond-go/p2p"
 	"github.com/ElrondNetwork/elrond-go/p2p/libp2p"
-	"github.com/ElrondNetwork/elrond-go/p2p/libp2p/discovery"
 	"github.com/ElrondNetwork/elrond-go/p2p/loadBalancer"
 	"github.com/ElrondNetwork/elrond-go/process/factory"
 	syncFork "github.com/ElrondNetwork/elrond-go/process/sync"
@@ -54,6 +58,7 @@ const blsConsensusType = "bls"
 const bnConsensusType = "bn"
 
 var r *rand.Rand
+var consensusChainID = []byte("consensus chain ID")
 
 func init() {
 	r = rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -69,7 +74,6 @@ type testNode struct {
 	sk               crypto.PrivateKey
 	pk               crypto.PublicKey
 	dPool            dataRetriever.PoolsHolder
-	dMetaPool        dataRetriever.MetaPoolsHolder
 	headersRecv      int32
 	mutHeaders       sync.Mutex
 	headersHashes    [][]byte
@@ -128,7 +132,7 @@ func createMessengerWithKadDht(ctx context.Context, initialAddr string) p2p.Mess
 		sk,
 		nil,
 		loadBalancer.NewOutgoingChannelLoadBalancer(),
-		discovery.NewKadDhtPeerDiscoverer(time.Second, "test", []string{initialAddr}),
+		integrationTests.CreateKadPeerDiscoverer(time.Second, []string{initialAddr}),
 	)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -175,9 +179,8 @@ func createTestBlockChain() data.ChainHandler {
 
 func createMemUnit() storage.Storer {
 	cache, _ := storageUnit.NewCache(storageUnit.LRUCache, 10, 1)
-	persist, _ := memorydb.New()
 
-	unit, _ := storageUnit.NewStorageUnit(cache, persist)
+	unit, _ := storageUnit.NewStorageUnit(cache, memorydb.New())
 	return unit
 }
 
@@ -193,36 +196,31 @@ func createTestStore() dataRetriever.StorageService {
 }
 
 func createTestShardDataPool() dataRetriever.PoolsHolder {
-	txPool, _ := shardedData.NewShardedData(storageUnit.CacheConfig{Size: 100000, Type: storageUnit.LRUCache})
+	txPool, _ := txpool.NewShardedTxPool(storageUnit.CacheConfig{Size: 100000, Shards: 1})
 	uTxPool, _ := shardedData.NewShardedData(storageUnit.CacheConfig{Size: 100000, Type: storageUnit.LRUCache})
 	rewardsTxPool, _ := shardedData.NewShardedData(storageUnit.CacheConfig{Size: 100, Type: storageUnit.LRUCache})
-	cacherCfg := storageUnit.CacheConfig{Size: 100, Type: storageUnit.LRUCache}
-	hdrPool, _ := storageUnit.NewCache(cacherCfg.Type, cacherCfg.Size, cacherCfg.Shards)
 
-	cacherCfg = storageUnit.CacheConfig{Size: 100000, Type: storageUnit.LRUCache}
-	hdrNoncesCacher, _ := storageUnit.NewCache(cacherCfg.Type, cacherCfg.Size, cacherCfg.Shards)
-	hdrNonces, _ := dataPool.NewNonceSyncMapCacher(hdrNoncesCacher, uint64ByteSlice.NewBigEndianConverter())
+	hdrPool, _ := headersCache.NewHeadersPool(config.HeadersPoolConfig{MaxHeadersPerShard: 1000, NumElementsToRemoveOnEviction: 100})
 
-	cacherCfg = storageUnit.CacheConfig{Size: 100000, Type: storageUnit.LRUCache}
+	cacherCfg := storageUnit.CacheConfig{Size: 100000, Type: storageUnit.LRUCache}
 	txBlockBody, _ := storageUnit.NewCache(cacherCfg.Type, cacherCfg.Size, cacherCfg.Shards)
 
 	cacherCfg = storageUnit.CacheConfig{Size: 100000, Type: storageUnit.LRUCache}
 	peerChangeBlockBody, _ := storageUnit.NewCache(cacherCfg.Type, cacherCfg.Size, cacherCfg.Shards)
 
-	cacherCfg = storageUnit.CacheConfig{Size: 100000, Type: storageUnit.LRUCache}
-	metaBlocks, _ := storageUnit.NewCache(cacherCfg.Type, cacherCfg.Size, cacherCfg.Shards)
+	cacherCfg = storageUnit.CacheConfig{Size: 50000, Type: storageUnit.LRUCache}
+	trieNodes, _ := storageUnit.NewCache(cacherCfg.Type, cacherCfg.Size, cacherCfg.Shards)
 
 	currTxs, _ := dataPool.NewCurrentBlockPool()
 
-	dPool, _ := dataPool.NewShardedDataPool(
+	dPool, _ := dataPool.NewDataPool(
 		txPool,
 		uTxPool,
 		rewardsTxPool,
 		hdrPool,
-		hdrNonces,
 		txBlockBody,
 		peerChangeBlockBody,
-		metaBlocks,
+		trieNodes,
 		currTxs,
 	)
 
@@ -233,8 +231,21 @@ func createAccountsDB(marshalizer marshal.Marshalizer) state.AccountsAdapter {
 	marsh := &marshal.JsonMarshalizer{}
 	hasher := sha256.Sha256{}
 	store := createMemUnit()
+	evictionWaitListSize := uint(100)
+	ewl, _ := evictionWaitingList.NewEvictionWaitingList(evictionWaitListSize, memorydb.New(), marsh)
 
-	tr, _ := trie.NewTrie(store, marsh, hasher)
+	// TODO change this implementation with a factory
+	tempDir, _ := ioutil.TempDir("", "integrationTests")
+	cfg := &config.DBConfig{
+		FilePath:          tempDir,
+		Type:              string(storageUnit.LvlDbSerial),
+		BatchDelaySeconds: 4,
+		MaxBatchSize:      10000,
+		MaxOpenFiles:      10,
+	}
+	trieStorage, _ := trie.NewTrieStorageManager(store, cfg, ewl)
+
+	tr, _ := trie.NewTrie(trieStorage, marsh, hasher)
 	adb, _ := state.NewAccountsDB(tr, sha256.Sha256{}, marshalizer, &mock.AccountsFactoryStub{
 		CreateAccountCalled: func(address state.AddressContainer, tracker state.AccountTracker) (wrapper state.AccountHandler, e error) {
 			return state.NewAccount(address, tracker)
@@ -319,8 +330,8 @@ func createConsensusOnlyNode(
 		CreateBlockCalled: func(header data.HeaderHandler, haveTime func() bool) (handler data.BodyHandler, e error) {
 			return &dataBlock.Body{}, nil
 		},
-		ApplyBodyToHeaderCalled: func(header data.HeaderHandler, body data.BodyHandler) error {
-			return nil
+		ApplyBodyToHeaderCalled: func(header data.HeaderHandler, body data.BodyHandler) (data.BodyHandler, error) {
+			return body, nil
 		},
 		MarshalizedDataToBroadcastCalled: func(header data.HeaderHandler, body data.BodyHandler) (map[uint32][]byte, map[string][][]byte, error) {
 			mrsData := make(map[uint32][]byte)
@@ -366,22 +377,43 @@ func createConsensusOnlyNode(
 	rounder, err := round.NewRound(
 		time.Unix(startTime, 0),
 		syncer.CurrentTime(),
-		time.Millisecond*time.Duration(uint64(roundTime)),
+		time.Millisecond*time.Duration(roundTime),
 		syncer)
 
-	forkDetector, _ := syncFork.NewShardForkDetector(rounder, timecache.NewTimeCache(time.Second), 0)
+	argsNewMetaEpochStart := &metachain.ArgsNewMetaEpochStartTrigger{
+		GenesisTime:        time.Unix(startTime, 0),
+		EpochStartNotifier: &mock.EpochStartNotifierStub{},
+		Settings: &config.EpochStartConfig{
+			MinRoundsBetweenEpochs: 1,
+			RoundsPerEpoch:         3,
+		},
+		Epoch:       0,
+		Storage:     createTestStore(),
+		Marshalizer: testMarshalizer,
+	}
+	epochStartTrigger, _ := metachain.NewEpochStartTrigger(argsNewMetaEpochStart)
+
+	forkDetector, _ := syncFork.NewShardForkDetector(
+		rounder,
+		timecache.NewTimeCache(time.Second),
+		&mock.BlockTrackerStub{},
+		0,
+	)
 
 	hdrResolver := &mock.HeaderResolverMock{}
 	mbResolver := &mock.MiniBlocksResolverMock{}
 	resolverFinder := &mock.ResolversFinderStub{
 		IntraShardResolverCalled: func(baseTopic string) (resolver dataRetriever.Resolver, e error) {
-			if baseTopic == factory.HeadersTopic {
-				return hdrResolver, nil
-			}
 			if baseTopic == factory.MiniBlocksTopic {
 				return mbResolver, nil
 			}
-			return hdrResolver, nil
+			return nil, nil
+		},
+		CrossShardResolverCalled: func(baseTopic string, crossShard uint32) (resolver dataRetriever.Resolver, err error) {
+			if baseTopic == factory.ShardBlocksTopic {
+				return hdrResolver, nil
+			}
+			return nil, nil
 		},
 	}
 
@@ -391,14 +423,14 @@ func createConsensusOnlyNode(
 		inPubKeys[shardId] = append(inPubKeys[shardId], string(sPubKey))
 	}
 
-	testMultiSig := mock.NewMultiSigner(uint32(consensusSize))
+	testMultiSig := mock.NewMultiSigner(consensusSize)
 	_ = testMultiSig.Reset(inPubKeys[shardId], uint16(selfId))
 
 	accntAdapter := createAccountsDB(testMarshalizer)
 
 	n, err := node.NewNode(
 		node.WithInitialNodesPubKeys(inPubKeys),
-		node.WithRoundDuration(uint64(roundTime)),
+		node.WithRoundDuration(roundTime),
 		node.WithConsensusGroupSize(int(consensusSize)),
 		node.WithSyncer(syncer),
 		node.WithGenesisTime(time.Unix(startTime, 0)),
@@ -407,7 +439,7 @@ func createConsensusOnlyNode(
 		node.WithPrivKey(privKey),
 		node.WithForkDetector(forkDetector),
 		node.WithMessenger(messenger),
-		node.WithMarshalizer(testMarshalizer),
+		node.WithMarshalizer(testMarshalizer, 0),
 		node.WithHasher(testHasher),
 		node.WithAddressConverter(testAddressConverter),
 		node.WithAccountsAdapter(accntAdapter),
@@ -425,8 +457,11 @@ func createConsensusOnlyNode(
 		node.WithResolversFinder(resolverFinder),
 		node.WithConsensusType(consensusType),
 		node.WithBlackListHandler(&mock.BlackListHandlerStub{}),
+		node.WithEpochStartTrigger(epochStartTrigger),
 		node.WithBootStorer(&mock.BoostrapStorerMock{}),
 		node.WithRequestedItemsHandler(&mock.RequestedItemsHandlerStub{}),
+		node.WithHeaderSigVerifier(&mock.HeaderSigVerifierStub{}),
+		node.WithChainID(consensusChainID),
 	)
 
 	if err != nil {

@@ -24,11 +24,19 @@ type SignRate struct {
 	NrFailure uint32
 }
 
+// ValidatorApiResponse represents the data which is fetched from each validator for returning it in API call
+type ValidatorApiResponse struct {
+	NrLeaderSuccess    uint32 `json:"nrLeaderSuccess"`
+	NrLeaderFailure    uint32 `json:"nrLeaderFailure"`
+	NrValidatorSuccess uint32 `json:"nrValidatorSuccess"`
+	NrValidatorFailure uint32 `json:"nrValidatorFailure"`
+}
+
 // PeerAccount is the struct used in serialization/deserialization
 type PeerAccount struct {
 	BLSPublicKey     []byte
 	SchnorrPublicKey []byte
-	Address          []byte
+	RewardAddress    []byte
 	Stake            *big.Int
 
 	JailTime      TimePeriod
@@ -44,9 +52,10 @@ type PeerAccount struct {
 
 	CodeHash []byte
 
-	Rating   uint32
-	RootHash []byte
-	Nonce    uint64
+	Rating     uint32
+	TempRating uint32
+	RootHash   []byte
+	Nonce      uint64
 
 	addressContainer AddressContainer
 	code             []byte
@@ -70,7 +79,7 @@ func NewPeerAccount(
 		Stake:            big.NewInt(0),
 		addressContainer: addressContainer,
 		accountTracker:   tracker,
-		dataTrieTracker:  NewTrackableDataTrie(nil),
+		dataTrieTracker:  NewTrackableDataTrie(addressContainer.Bytes(), nil),
 	}, nil
 }
 
@@ -168,19 +177,19 @@ func (a *PeerAccount) DataTrieTracker() DataTrieTracker {
 	return a.dataTrieTracker
 }
 
-// SetAddressWithJournal sets the account's address, saving the old address before changing
-func (a *PeerAccount) SetAddressWithJournal(address []byte) error {
+// SetRewardAddressWithJournal sets the account's reward address, saving the old address before changing
+func (a *PeerAccount) SetRewardAddressWithJournal(address []byte) error {
 	if len(address) < 1 {
 		return ErrEmptyAddress
 	}
 
-	entry, err := NewPeerJournalEntryAddress(a, a.Address)
+	entry, err := NewPeerJournalEntryAddress(a, a.RewardAddress)
 	if err != nil {
 		return err
 	}
 
 	a.accountTracker.Journalize(entry)
-	a.Address = address
+	a.RewardAddress = address
 
 	return a.accountTracker.SaveAccount(a)
 }
@@ -357,6 +366,11 @@ func (a *PeerAccount) DecreaseLeaderSuccessRateWithJournal() error {
 	return a.accountTracker.SaveAccount(a)
 }
 
+// GetRating gets the rating
+func (a *PeerAccount) GetRating() uint32 {
+	return a.Rating
+}
+
 // SetRatingWithJournal sets the account's rating id, saving the old state before changing
 func (a *PeerAccount) SetRatingWithJournal(rating uint32) error {
 	entry, err := NewPeerJournalEntryRating(a, a.Rating)
@@ -366,6 +380,24 @@ func (a *PeerAccount) SetRatingWithJournal(rating uint32) error {
 
 	a.accountTracker.Journalize(entry)
 	a.Rating = rating
+
+	return a.accountTracker.SaveAccount(a)
+}
+
+// GetTempRating gets the rating
+func (a *PeerAccount) GetTempRating() uint32 {
+	return a.TempRating
+}
+
+// SetTempRatingWithJournal sets the account's tempRating, saving the old state before changing
+func (a *PeerAccount) SetTempRatingWithJournal(rating uint32) error {
+	entry, err := NewPeerJournalEntryTempRating(a, a.TempRating)
+	if err != nil {
+		return err
+	}
+
+	a.accountTracker.Journalize(entry)
+	a.TempRating = rating
 
 	return a.accountTracker.SaveAccount(a)
 }
