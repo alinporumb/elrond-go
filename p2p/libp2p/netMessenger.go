@@ -202,7 +202,7 @@ func createPubSub(ctxProvider *Libp2pContext, withSigning bool) (*pubsub.PubSub,
 
 	pubsub.TimeCacheDuration = pubsubTimeCacheDuration
 
-	ps, err := pubsub.NewFloodSub(ctxProvider.Context(), ctxProvider.Host(), optsPS...)
+	ps, err := pubsub.NewGossipSub(ctxProvider.Context(), ctxProvider.Host(), optsPS...)
 	if err != nil {
 		return nil, err
 	}
