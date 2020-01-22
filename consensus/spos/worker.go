@@ -200,7 +200,7 @@ func (wrk *Worker) receivedSyncState(isNodeSynchronized bool) {
 	}
 }
 
-func (wrk *Worker) ReceivedHeader(headerHandler data.HeaderHandler, headerHash []byte) {
+func (wrk *Worker) ReceivedHeader(headerHandler data.HeaderHandler, _ []byte) {
 	if headerHandler.GetShardID() != wrk.shardCoordinator.SelfId() ||
 		int64(headerHandler.GetRound()) != wrk.rounder.Index() {
 		return
@@ -265,6 +265,13 @@ func (wrk *Worker) getCleanedList(cnsDataList []*consensus.Message) []*consensus
 
 // ProcessReceivedMessage method redirects the received message to the channel which should handle it
 func (wrk *Worker) ProcessReceivedMessage(message p2p.MessageP2P, _ func(buffToSend []byte)) error {
+	sw := core.NewStopWatch()
+	sw.Start("ProcessReceivedMessage")
+	defer func() {
+		sw.Stop("ProcessReceivedMessage")
+		log.Debug("worker measurements", sw.GetMeasurements()...)
+	}()
+
 	if check.IfNil(message) {
 		return ErrNilMessage
 	}
