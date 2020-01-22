@@ -357,6 +357,19 @@ func (netMes *networkMessenger) PeerAddress(pid p2p.PeerID) string {
 	return addresses[0].String()
 }
 
+// PeerAddresses returns the peer's addresses slice
+func (netMes *networkMessenger) PeerAddresses(pid p2p.PeerID) []string {
+	h := netMes.ctxProvider.Host()
+
+	adrs := h.Peerstore().Addrs(peer.ID(pid.Bytes()))
+	strs := make([]string, len(adrs))
+	for i := 0; i < len(adrs); i++ {
+		strs[i] = adrs[i].String()
+	}
+
+	return strs
+}
+
 // ConnectedPeersOnTopic returns the connected peers on a provided topic
 func (netMes *networkMessenger) ConnectedPeersOnTopic(topic string) []p2p.PeerID {
 	return netMes.poc.ConnectedPeersOnChannel(topic)

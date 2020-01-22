@@ -161,6 +161,8 @@ type Messenger interface {
 	ThresholdMinConnectedPeers() int
 	SetThresholdMinConnectedPeers(minConnectedPeers int) error
 
+	PeerAddresses(pid PeerID) []string
+
 	// IsInterfaceNil returns true if there is no value under the interface
 	IsInterfaceNil() bool
 }
