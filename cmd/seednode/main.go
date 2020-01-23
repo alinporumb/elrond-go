@@ -254,4 +254,18 @@ func displayMessengerInfo(messenger p2p.Messenger) {
 
 	tbl2, _ := display.CreateTableString(headerConnectedAddresses, connAddresses)
 	fmt.Println(tbl2)
+
+	fmt.Println("Peer IDs and their known addresses:")
+	pids := messenger.ConnectedPeers()
+	for _, p := range pids {
+		hdr := []string{fmt.Sprintf("%s", p.Pretty())}
+		addrsStr := messenger.PeerAddresses(p)
+		addrs := make([]*display.LineData, len(addrsStr))
+		for idx, addr := range addrsStr {
+			addrs[idx] = display.NewLineData(false, []string{addr})
+		}
+
+		tbl3, _ := display.CreateTableString(hdr, addrs)
+		fmt.Println(tbl3)
+	}
 }

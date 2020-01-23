@@ -207,6 +207,19 @@ func (netMes *networkMessenger) ConnectToPeer(address string) error {
 	return h.ConnectToPeer(ctx, address)
 }
 
+// PeerAddresses returns the peer's addresses slice
+func (netMes *networkMessenger) PeerAddresses(pid p2p.PeerID) []string {
+	h := netMes.ctxProvider.Host()
+
+	adrs := h.Peerstore().Addrs(peer.ID(pid.Bytes()))
+	strs := make([]string, len(adrs))
+	for i := 0; i < len(adrs); i++ {
+		strs[i] = adrs[i].String()
+	}
+
+	return strs
+}
+
 // TrimConnections will trigger a manual sweep onto current connection set reducing the
 // number of connections if needed
 func (netMes *networkMessenger) TrimConnections() {

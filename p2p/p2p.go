@@ -73,6 +73,7 @@ type Messenger interface {
 	ConnectedPeersOnTopic(topic string) []PeerID
 	TrimConnections()
 	Bootstrap() error
+	PeerAddresses(pid PeerID) []string
 
 	CreateTopic(name string, createChannelForTopic bool) error
 	HasTopic(name string) bool
