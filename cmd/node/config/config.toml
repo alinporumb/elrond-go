@@ -236,7 +236,7 @@
     Type = "LRU"
 
 [TxDataPool]
-    Size = 250000
+    Size = 200000
     SizeInBytes = 100000000
     Type = "TxCache"
     Shards = 16
@@ -282,8 +282,8 @@
 
 # TODO: change this config to real numbers before merging to development
 [EpochStartConfig]
-    MinRoundsBetweenEpochs = 50
-    RoundsPerEpoch         = 100
+    MinRoundsBetweenEpochs = 25
+    RoundsPerEpoch         = 50
 
 # ResourceStats, if enabled, will output in a folder called "stats"
 # resource statistics. For example: number of active go routines, memory allocation, number of GC sweeps, etc.

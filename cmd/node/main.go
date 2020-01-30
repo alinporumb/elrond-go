@@ -9,8 +9,10 @@ import (
 	"math/big"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"runtime"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"syscall"
@@ -852,6 +854,8 @@ func startNode(ctx *cli.Context, log logger.Logger, version string) error {
 		return err
 	}
 
+	go pprofMem()
+
 	log.Info("application is now running")
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
@@ -873,6 +877,30 @@ func startNode(ctx *cli.Context, log logger.Logger, version string) error {
 		log.LogIfError(err)
 	}
 	return nil
+}
+
+func pprofMem() {
+	for {
+		var m runtime.MemStats
+		runtime.ReadMemStats(&m)
+
+		heapInUse := m.HeapInuse / 1024 / 1024
+		fmt.Println("Heap in use (MB):", heapInUse)
+		if heapInUse > 2700 {
+			fmt.Println("High memory (MB):", heapInUse)
+			currentDir, _ := os.Getwd()
+			statsPath := filepath.Join(currentDir, "stats")
+			fmt.Println(statsPath)
+			os.MkdirAll(statsPath, os.ModePerm)
+			fileName := "HEAP" + time.Now().Format("20060102150405") + ".pprof"
+			filePath := path.Join(statsPath, fileName)
+			file, _ := os.Create(filePath)
+			defer file.Close()
+			pprof.WriteHeapProfile(file)
+		}
+
+		time.Sleep(500 * time.Millisecond)
+	}
 }
 
 func indexValidatorsListIfNeeded(elasticIndexer indexer.Indexer, coordinator sharding.NodesCoordinator) {
