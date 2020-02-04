@@ -38,6 +38,7 @@ const pubsubTimeCacheDuration = 10 * time.Minute
 const broadcastGoRoutines = 1000
 
 const defaultThresholdMinConnectedPeers = 3
+const durationBetweenPeersPrints = time.Second * 20
 
 //TODO remove the header size of the message when commit d3c5ecd3a3e884206129d9f2a9a4ddfd5e7c8951 from
 // https://github.com/libp2p/go-libp2p-pubsub/pull/189/commits will be part of a new release
@@ -175,6 +176,19 @@ func createMessenger(
 	if err != nil {
 		return nil, err
 	}
+
+	go func() {
+		for {
+			time.Sleep(durationBetweenPeersPrints)
+
+			numConnectedPeers := len(netMes.ConnectedPeers())
+			numKnownPeers := len(netMes.Peers())
+			log.Debug("network connection status",
+				"known peers", numKnownPeers,
+				"connected peers", numConnectedPeers,
+			)
+		}
+	}()
 
 	go func(pubsub *pubsub.PubSub, plb p2p.ChannelLoadBalancer) {
 		for {
