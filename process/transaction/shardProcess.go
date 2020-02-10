@@ -1,6 +1,7 @@
 package transaction
 
 import (
+	"encoding/hex"
 	"errors"
 	"math/big"
 
@@ -11,10 +12,13 @@ import (
 	"github.com/ElrondNetwork/elrond-go/data/state"
 	"github.com/ElrondNetwork/elrond-go/data/transaction"
 	"github.com/ElrondNetwork/elrond-go/hashing"
+	"github.com/ElrondNetwork/elrond-go/logger"
 	"github.com/ElrondNetwork/elrond-go/marshal"
 	"github.com/ElrondNetwork/elrond-go/process"
 	"github.com/ElrondNetwork/elrond-go/sharding"
 )
+
+var log = logger.GetOrCreate("process/block")
 
 // txProcessor implements TransactionProcessor interface and can modify account states according to a transaction
 type txProcessor struct {
@@ -111,6 +115,20 @@ func (txProc *txProcessor) ProcessTransaction(tx *transaction.Transaction) error
 	if err != nil {
 		return err
 	}
+
+	txHash, _ := core.CalculateHash(txProc.marshalizer, txProc.hasher, tx)
+	log.Warn("executing tx",
+		"hash", hex.EncodeToString(txHash),
+		"nonce", tx.Nonce,
+		"value", tx.Value,
+		"gas limit", tx.GasLimit,
+		"gas price", tx.GasPrice,
+		"data", hex.EncodeToString(tx.Data),
+		"sender", hex.EncodeToString(tx.SndAddr),
+		"recv", hex.EncodeToString(tx.RcvAddr),
+		"sender nonce", acntSnd.GetNonce(),
+		"sender balance", acntSnd.(*state.Account).Balance,
+	)
 
 	err = txProc.checkTxValues(tx, acntSnd)
 	if err != nil {
