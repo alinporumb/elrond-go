@@ -117,6 +117,7 @@ func (txProc *txProcessor) ProcessTransaction(tx *transaction.Transaction) error
 	}
 
 	txHash, _ := core.CalculateHash(txProc.marshalizer, txProc.hasher, tx)
+
 	log.Warn("executing tx",
 		"hash", hex.EncodeToString(txHash),
 		"nonce", tx.Nonce,
@@ -125,10 +126,14 @@ func (txProc *txProcessor) ProcessTransaction(tx *transaction.Transaction) error
 		"gas price", tx.GasPrice,
 		"data", hex.EncodeToString(tx.Data),
 		"sender", hex.EncodeToString(tx.SndAddr),
-		"recv", hex.EncodeToString(tx.RcvAddr),
-		"sender nonce", acntSnd.GetNonce(),
-		"sender balance", acntSnd.(*state.Account).Balance,
-	)
+		"recv", hex.EncodeToString(tx.RcvAddr))
+
+	if acntSnd != nil {
+		log.Warn("executing tx",
+			"sender nonce", acntSnd.GetNonce(),
+			"sender balance", acntSnd.(*state.Account).Balance,
+		)
+	}
 
 	err = txProc.checkTxValues(tx, acntSnd)
 	if err != nil {
