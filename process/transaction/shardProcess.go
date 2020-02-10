@@ -126,12 +126,12 @@ func (txProc *txProcessor) ProcessTransaction(tx *transaction.Transaction) error
 		"gas price", tx.GasPrice,
 		"data", hex.EncodeToString(tx.Data),
 		"sender", hex.EncodeToString(tx.SndAddr),
-		"recv", hex.EncodeToString(tx.RcvAddr))
+		"receiver", hex.EncodeToString(tx.RcvAddr))
 
 	if acntSnd != nil {
-		log.Warn("executing tx",
-			"sender nonce", acntSnd.GetNonce(),
-			"sender balance", acntSnd.(*state.Account).Balance,
+		log.Warn("sender account details",
+			"nonce", acntSnd.GetNonce(),
+			"balance", acntSnd.(*state.Account).Balance,
 		)
 	}
 
