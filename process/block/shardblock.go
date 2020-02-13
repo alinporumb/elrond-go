@@ -764,7 +764,12 @@ func (sp *shardProcessor) CommitBlock(
 	selfNotarizedHeader, selfNotarizedHeaderHash := sp.getLastSelfNotarizedHeader()
 	sp.blockTracker.AddSelfNotarizedHeader(sharding.MetachainShardId, selfNotarizedHeader, selfNotarizedHeaderHash)
 
+	startTime := time.Now()
 	sp.updateStateStorage(selfNotarizedHeaders)
+	elapsedTime := time.Since(startTime)
+	log.Debug("elapsed time to update state storage",
+		"time [s]", elapsedTime,
+	)
 
 	highestFinalBlockNonce := sp.forkDetector.GetHighestFinalBlockNonce()
 	log.Debug("highest final shard block",

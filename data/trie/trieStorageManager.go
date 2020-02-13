@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/ElrondNetwork/elrond-go/config"
 	"github.com/ElrondNetwork/elrond-go/core/check"
@@ -192,10 +193,17 @@ func (tsm *trieStorageManager) removeFromDb(rootHash []byte) error {
 	var hash []byte
 	var present bool
 	for key := range hashes {
+
+		startTime := time.Now()
 		present, err = tsm.dbEvictionWaitingList.PresentInNewHashes(key)
+		elapsedTime := time.Since(startTime)
+		log.Trace("elapsed time to check present in new hashes",
+			"time [s]", elapsedTime,
+		)
 		if err != nil {
 			return err
 		}
+
 		if present {
 			continue
 		}
@@ -205,7 +213,12 @@ func (tsm *trieStorageManager) removeFromDb(rootHash []byte) error {
 			return err
 		}
 
+		startTime = time.Now()
 		err = tsm.db.Remove(hash)
+		elapsedTime = time.Since(startTime)
+		log.Trace("elapsed time to remove hash",
+			"time [s]", elapsedTime,
+		)
 		if err != nil {
 			return err
 		}
