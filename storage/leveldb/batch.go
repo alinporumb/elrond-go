@@ -1,6 +1,8 @@
 package leveldb
 
 import (
+	"time"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -23,7 +25,13 @@ func (b *batch) Put(key []byte, val []byte) error {
 
 // Delete deletes the entry for the provided key from the batch
 func (b *batch) Delete(key []byte) error {
+	startTime := time.Now()
 	b.batch.Delete(key)
+	elapsedTime := time.Since(startTime)
+	log.Trace("elapsed time to remove hash from levelDB batch",
+		"time [s]", elapsedTime,
+	)
+
 	return nil
 }
 

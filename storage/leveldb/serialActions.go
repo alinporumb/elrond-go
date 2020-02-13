@@ -1,6 +1,8 @@
 package leveldb
 
 import (
+	"time"
+
 	"github.com/ElrondNetwork/elrond-go/storage"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
@@ -54,8 +56,12 @@ func (g *getAct) request(s *SerialDB) {
 }
 
 func (d *delAct) request(s *SerialDB) {
+	startTime := time.Now()
 	err := s.db.Delete(d.key, nil)
-
+	elapsedTime := time.Since(startTime)
+	log.Trace("elapsed time to actually delete from disk",
+		"time [s]", elapsedTime,
+	)
 	d.resChan <- err
 }
 

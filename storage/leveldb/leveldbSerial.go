@@ -222,9 +222,14 @@ func (s *SerialDB) Remove(key []byte) error {
 		return storage.ErrSerialDBIsClosed
 	}
 
+	startTime := time.Now()
 	s.mutBatch.Lock()
 	_ = s.batch.Delete(key)
 	s.mutBatch.Unlock()
+	elapsedTime := time.Since(startTime)
+	log.Trace("elapsed time to remove hash from batch",
+		"time [s]", elapsedTime,
+	)
 
 	ch := make(chan error)
 	req := &delAct{
@@ -233,7 +238,12 @@ func (s *SerialDB) Remove(key []byte) error {
 	}
 
 	s.dbAccess <- req
+	startTime = time.Now()
 	result := <-ch
+	elapsedTime = time.Since(startTime)
+	log.Trace("elapsed time to get remove result",
+		"time [s]", elapsedTime,
+	)
 	close(ch)
 
 	return result
