@@ -23,9 +23,6 @@ var log = logger.GetOrCreate("integrationTests/multishard/block")
 // A validator from shard 0 receives rewards from shard 1 (where it is assigned) and creates move balance
 // transactions. All other shard peers can and will sync the blocks containing the move balance transactions.
 func TestExecutingTransactionsFromRewardsFundsCrossShard(t *testing.T) {
-	//TODO fix this test
-	t.Skip("TODO fix this test")
-
 	if testing.Short() {
 		t.Skip("this is not a short test")
 	}

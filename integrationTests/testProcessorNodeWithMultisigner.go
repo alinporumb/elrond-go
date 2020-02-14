@@ -22,6 +22,8 @@ import (
 	"github.com/ElrondNetwork/elrond-go/storage/lrucache"
 )
 
+var broadcastDelay = time.Second * 5
+
 // NewTestProcessorNodeWithCustomNodesCoordinator returns a new TestProcessorNode instance with custom NodesCoordinator
 func NewTestProcessorNodeWithCustomNodesCoordinator(
 	maxShards uint32,
@@ -91,7 +93,7 @@ func CreateNodesWithNodesCoordinator(
 	return CreateNodesWithNodesCoordinatorWithCacher(nodesPerShard, nbMetaNodes, nbShards, shardConsensusGroupSize, metaConsensusGroupSize, seedAddress, cache)
 }
 
-// CreateNodesWithNodesCoordinator returns a map with nodes per shard each using a real nodes coordinator
+// CreateNodesWithNodesCoordinatorWithCacher returns a map with nodes per shard each using a real nodes coordinator
 func CreateNodesWithNodesCoordinatorWithCacher(
 	nodesPerShard int,
 	nbMetaNodes int,
@@ -382,7 +384,7 @@ func AllShardsProposeBlock(
 		consensusNodes[i][0].CommitBlock(body[i], header[i])
 	}
 
-	time.Sleep(2 * time.Second)
+	time.Sleep(broadcastDelay)
 
 	return body, header, consensusNodes, newRandomness
 }
