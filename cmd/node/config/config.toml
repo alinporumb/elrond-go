@@ -218,9 +218,8 @@
     Type = "LRU"
 
 [TxDataPool]
-    Size = 900000
-    SizeInBytes = 524288000
-    Type = "TxCache"
+    Size = 75000
+    Type = "FIFOSharded"
     Shards = 16
 
 [TrieNodesDataPool]
