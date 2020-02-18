@@ -55,7 +55,7 @@
     #RoutingTableRefreshIntervalInSec defines how many seconds should pass between 2 kad routing table auto refresh calls
     RoutingTableRefreshIntervalInSec = 300
 
-    Type = "kad dht with lists"
+    Type = "kad dht with prio bits"
 
 [Sharding]
     # Number of ptiority bits used
