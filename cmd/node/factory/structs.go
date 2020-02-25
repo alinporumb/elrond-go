@@ -83,8 +83,6 @@ import (
 	"github.com/ElrondNetwork/elrond-go/vm"
 	systemVM "github.com/ElrondNetwork/elrond-go/vm/process"
 	"github.com/ElrondNetwork/elrond-vm-common"
-	"github.com/btcsuite/btcd/btcec"
-	libp2pCrypto "github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/urfave/cli"
 )
 
@@ -148,12 +146,12 @@ type Data struct {
 
 // Crypto struct holds the crypto components of the Elrond protocol
 type Crypto struct {
-	TxSingleSigner  crypto.SingleSigner
-	SingleSigner    crypto.SingleSigner
-	MultiSigner     crypto.MultiSigner
-	BlockSignKeyGen crypto.KeyGenerator
-	TxSignKeyGen    crypto.KeyGenerator
-	InitialPubKeys  map[uint32][]string
+	TxSingleSigner      crypto.SingleSigner
+	SingleSigner        crypto.SingleSigner
+	MultiSigner         crypto.MultiSigner
+	BlockSignKeyGen     crypto.KeyGenerator
+	TxSignKeyGen        crypto.KeyGenerator
+	InitialPubKeys      map[uint32][]string
 	MessageSignVerifier vm.MessageSignVerifier
 }
 
@@ -462,12 +460,12 @@ func CryptoComponentsFactory(args *cryptoComponentsFactoryArgs) (*Crypto, error)
 	}
 
 	return &Crypto{
-		TxSingleSigner:  txSingleSigner,
-		SingleSigner:    singleSigner,
-		MultiSigner:     multiSigner,
-		BlockSignKeyGen: args.keyGen,
-		TxSignKeyGen:    txSignKeyGen,
-		InitialPubKeys:  initialPubKeys,
+		TxSingleSigner:      txSingleSigner,
+		SingleSigner:        singleSigner,
+		MultiSigner:         multiSigner,
+		BlockSignKeyGen:     args.keyGen,
+		TxSignKeyGen:        txSignKeyGen,
+		InitialPubKeys:      initialPubKeys,
 		MessageSignVerifier: messageSignVerifier,
 	}, nil
 }
